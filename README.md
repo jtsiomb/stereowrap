@@ -4,8 +4,8 @@ About
 -----
 Stereowrap is an emulation layer implementing stereoscopic OpenGL visuals on
 top of non stereo capable OpenGL implementations. To do that it overrides,
-using LD\_PRELOAD, the GLX visual selection functions (glXChooseVisual and
-glXChooseFBConfig), glDrawBuffer, and glXSwapBuffers to capture and composite
+using `LD_PRELOAD`, the GLX visual selection functions (`glXChooseVisual` and
+`glXChooseFBConfig`), `glDrawBuffer`, and `glXSwapBuffers` to capture and composite
 the two stereo images rendered by the application, in a number of ways. 
 
 Currently stereowrap supports presenting the stereo pair in the following ways:
