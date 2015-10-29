@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <assert.h>
 #include <unistd.h>
 #include <dlfcn.h>
@@ -39,7 +40,10 @@ enum {
 	REDCYAN,
 	GREENMAG,
 	COLORCODE,
-	SEQUENTIAL
+	SEQUENTIAL,
+	LEFT,
+	RIGHT,
+	FLICKER
 };
 
 #define LEFT_TEX	rtex[swap_eyes ? 1 : 0]
@@ -65,7 +69,11 @@ static void show_redcyan(void);
 static void show_greenmag(void);
 static void show_colorcode(void);
 static void show_sequential(void);
+static void show_left(void);
+static void show_right(void);
+static void show_flicker(void);
 static void sdr_combine(const char *sdr);
+static unsigned int get_msec(void);
 
 static void (*draw_buffer)(GLenum);
 static void (*swap_buffers)(Display*, GLXDrawable);
@@ -125,6 +133,9 @@ static struct {
 	{COLORCODE, "colorcode", 1, show_colorcode},
 #endif
 	{SEQUENTIAL, "sequential", 0, show_sequential},
+	{LEFT, "left", 0, show_left},
+	{RIGHT, "right", 0, show_right},
+	{FLICKER, "flicker", 0, show_flicker},
 	{0, 0, 0, 0}
 };
 
@@ -319,6 +330,11 @@ static int init_ext(void)
 
 void glDrawBuffer(GLenum buf)
 {
+	if(buf != GL_BACK_LEFT && buf != GL_BACK_RIGHT) {
+		draw_buffer(buf);
+		return;
+	}
+
 	int new_buf = buf - GL_BACK_LEFT;
 
 	if(new_buf == cur_buf) {
@@ -638,7 +654,7 @@ static void show_colorcode(void)
 	sdr_combine(colorcode_shader);
 }
 
-static void show_sequential(void)
+static void force_redraw(void)
 {
 	XEvent xev;
 	/* force the application to redraw immediately afterwards to
@@ -651,6 +667,11 @@ static void show_sequential(void)
 	xev.xexpose.height = ysz;
 	xev.xexpose.count = 0;
 	XSendEvent(dpy, drawable, False, 0, &xev);
+}
+
+static void show_sequential(void)
+{
+	force_redraw();
 
 	glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, LEFT_TEX);
@@ -659,6 +680,31 @@ static void show_sequential(void)
 	swap_buffers(dpy, drawable);
 
 	glBindTexture(GL_TEXTURE_2D, RIGHT_TEX);
+	draw_quad(-1, -1, 1, 1);
+}
+
+static void show_left(void)
+{
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, LEFT_TEX);
+	draw_quad(-1, -1, 1, 1);
+}
+
+static void show_right(void)
+{
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, RIGHT_TEX);
+	draw_quad(-1, -1, 1, 1);
+}
+
+static void show_flicker(void)
+{
+	force_redraw();
+
+	int frame = (get_msec() / 250) & 1;
+
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, frame == 0 ? LEFT_TEX : RIGHT_TEX);
 	draw_quad(-1, -1, 1, 1);
 }
 
@@ -763,4 +809,18 @@ static unsigned int create_pixel_shader(const char *src)
 	assert(glGetError() == GL_NO_ERROR);
 #endif	/* GL_ARB_shader_objects */
 	return prog;
+}
+
+static unsigned int get_msec(void)
+{
+	struct timeval tv;
+	static struct timeval tv0;
+
+	gettimeofday(&tv, 0);
+	if(tv0.tv_sec == 0 && tv0.tv_usec == 0) {
+		tv0 = tv;
+		return 0;
+	}
+
+	return (tv.tv_sec - tv0.tv_sec) * 1000 + (tv.tv_usec - tv0.tv_usec) / 1000;
 }
